@@ -15,4 +15,7 @@ ifeq ($(USE_QEMU_GPS_HARDWARE),true)
 endif
 
 LOCAL_SRC_FILES += gps/gps.cpp
+LOCAL_SRC_FILES += gps/gps_msm7k.c
+LOCAL_SRC_FILES += gps/gps-rpc.c
+LOCAL_SHARED_LIBRARIES += librpc
 
