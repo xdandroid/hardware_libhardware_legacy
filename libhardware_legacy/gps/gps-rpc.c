@@ -3,6 +3,8 @@
 #include <librpc/rpc/rpc.h>
 #include <sys/select.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <librpc/rpc/rpc_router_ioctl.h>
@@ -398,7 +400,16 @@ int init_gps5225() {
 
 
 int init_gps_rpc() {
-	amss=A6125; //Need autodetection.
+	int fd=open("/sys/class/htc_hw/amss", O_RDONLY);
+	char buf[32];
+	bzero(buf, 32);
+	read(fd, buf, 32);
+	if(strncmp(buf, "6125", 4)==0)
+		amss=A6125;
+	else if(strncmp(buf, "5225", 4)==0)
+		amss=A5225;
+	else
+		amss=A6125; //Fallback to 6125 ATM, but could be 6150, which isn't expected to work
 	if(amss==A6125)
 		init_gps6125();
 	else if(amss==A5225)

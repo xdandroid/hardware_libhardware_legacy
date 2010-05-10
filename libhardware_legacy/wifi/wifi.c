@@ -48,6 +48,7 @@ static char iface[PROPERTY_VALUE_MAX];
 // TODO: use new ANDROID_SOCKET mechanism, once support for multiple
 // sockets is in
 
+#ifdef BROADCOM_wIFI
 #ifndef WIFI_DRIVER_MODULE_PATH
 #define WIFI_DRIVER_MODULE_PATH         "/system/lib/modules/bcm4329.ko"
 #endif
@@ -61,6 +62,21 @@ static char iface[PROPERTY_VALUE_MAX];
 #define WIFI_FIRMWARE_LOADER		""
 #endif
 #define WIFI_TEST_INTERFACE		"sta"
+#else /* BROADCOM_WIFI */
+#ifndef WIFI_DRIVER_MODULE_PATH
+#define WIFI_DRIVER_MODULE_PATH         "/system/lib/modules/wlan.ko"
+#endif
+#ifndef WIFI_DRIVER_MODULE_NAME
+#define WIFI_DRIVER_MODULE_NAME         "wlan"
+#endif
+#ifndef WIFI_DRIVER_MODULE_ARG
+#define WIFI_DRIVER_MODULE_ARG          ""
+#endif
+#ifndef WIFI_FIRMWARE_LOADER
+#define WIFI_FIRMWARE_LOADER            ""
+#endif
+#define WIFI_TEST_INTERFACE             "sta"
+#endif /* BROADCOM_WIFI */
 
 static const char IFACE_DIR[]           = "/data/system/wpa_supplicant";
 static const char DRIVER_MODULE_NAME[]  = WIFI_DRIVER_MODULE_NAME;
