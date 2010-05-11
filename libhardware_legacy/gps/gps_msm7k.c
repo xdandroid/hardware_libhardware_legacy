@@ -643,7 +643,7 @@ static void* gps_state_thread( void*  arg ) {
 		struct epoll_event   events[2];
 		int                  ne, nevents;
 
-		nevents = epoll_wait( epoll_fd, events, 2, 5000 );
+		nevents = epoll_wait( epoll_fd, events, 2, started ? 5000 : -1);
 		if (nevents < 0) {
 			if (errno != EINTR)
 				LOGE("epoll_wait() unexpected error: %s", strerror(errno));
