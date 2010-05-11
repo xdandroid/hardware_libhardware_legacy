@@ -422,5 +422,8 @@ void gps_get_position() {
 }
 
 void exit_gps_rpc() {
-	pdsm_client_end_session(_clnt, 0, 2);
+	if(amss==A6125)
+		pdsm_client_end_session(_clnt, 0, 2);
+	//5225 doesn't seem to like end_session ?
+	//Bah it ends session on itself after 10seconds.
 }
