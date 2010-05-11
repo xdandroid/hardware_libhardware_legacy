@@ -49,6 +49,7 @@ static char iface[PROPERTY_VALUE_MAX];
 // sockets is in
 
 #ifdef BROADCOM_wIFI
+
 #ifndef WIFI_DRIVER_MODULE_PATH
 #define WIFI_DRIVER_MODULE_PATH         "/system/lib/modules/bcm4329.ko"
 #endif
@@ -62,7 +63,9 @@ static char iface[PROPERTY_VALUE_MAX];
 #define WIFI_FIRMWARE_LOADER		""
 #endif
 #define WIFI_TEST_INTERFACE		"sta"
+
 #else /* BROADCOM_WIFI */
+
 #ifndef WIFI_DRIVER_MODULE_PATH
 #define WIFI_DRIVER_MODULE_PATH         "/system/lib/modules/wlan.ko"
 #endif
@@ -73,9 +76,10 @@ static char iface[PROPERTY_VALUE_MAX];
 #define WIFI_DRIVER_MODULE_ARG          ""
 #endif
 #ifndef WIFI_FIRMWARE_LOADER
-#define WIFI_FIRMWARE_LOADER            ""
+#define WIFI_FIRMWARE_LOADER            "loadit"
 #endif
 #define WIFI_TEST_INTERFACE             "sta"
+
 #endif /* BROADCOM_WIFI */
 
 static const char IFACE_DIR[]           = "/data/system/wpa_supplicant";
