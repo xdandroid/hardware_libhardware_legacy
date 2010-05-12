@@ -10,7 +10,7 @@
 #include <librpc/rpc/rpc_router_ioctl.h>
 //#include <debug.h>
 #include <pthread.h>
-#include <libhardware_legacy/gps.h>
+#include <hardware_legacy/gps.h>
 
 typedef struct registered_server_struct {
 	/* MUST BE AT OFFSET ZERO!  The client code assumes this when it overwrites
@@ -306,7 +306,7 @@ enum pdsm_pd_events {
 };
 
 //From gps_msm7k.c
-void update_gps_status(GpsStatusValue val);
+extern void update_gps_status(GpsStatusValue val);
 
 void dispatch_pdsm_pd(uint32_t *data) {
 	if(data[2]&PDSM_PD_EVENT_GPS_BEGIN) {
@@ -349,7 +349,7 @@ void dispatch(struct svc_req* a, registered_server* svc) {
 	printf("\n");
 	if(data[3]==0x3100005b) {
 		dispatch_pdsm(data);
-	} else if(data[3]==3100001d) {
+	} else if(data[3]==0x3100001d) {
 		dispatch_atl(data);
 	} else {
 		//Got dispatch for unknown serv id!

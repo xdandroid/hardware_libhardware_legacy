@@ -620,10 +620,11 @@ static int epoll_deregister( int  epoll_fd, int  fd ) {
 }
 
 void update_gps_status(GpsStatusValue val) {
+	GpsState*  state = _gps_state;
 	//Should be made thread safe...
-	state->status=val;
-	if(arg->callbacks)
-		arg->callbacks.status_cb(&state->status);
+	state->status.status=val;
+	if(state->callbacks.status_cb)
+		state->callbacks.status_cb(&state->status);
 }
 
 /* this is the main thread, it waits for commands from gps_state_start/stop and,
@@ -639,9 +640,9 @@ static void* gps_state_thread( void*  arg ) {
 	int         control_fd = state->control[1];
 
 	//Engine is enabled when the thread is started.
-	state->status=GPS_STATUS_ENGINE_ON;
-	if(arg->callbacks)
-		arg->callbacks.status_cb(&state->status);
+	state->status.status=GPS_STATUS_ENGINE_ON;
+	if(state->callbacks.status_cb)
+		state->callbacks.status_cb(&state->status);
 	nmea_reader_init( reader );
 
 	// register control file descriptors for polling
