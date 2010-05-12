@@ -636,6 +636,7 @@ void update_gps_svstatus(GpsSvStatus *val) {
  * when started, messages from the NMEA SMD. these are simple NMEA sentences
  * that must be parsed to be converted into GPS fixes sent to the framework
  */
+uint32_t _fix_frequency;//Which is a period not a frequency, but nvm.
 static void* gps_state_thread( void*  arg ) {
 	GpsState*   state = (GpsState*) arg;
 	NmeaReader  reader[1];
@@ -661,7 +662,7 @@ static void* gps_state_thread( void*  arg ) {
 		struct epoll_event   events[2];
 		int                  ne, nevents;
 
-		nevents = epoll_wait( epoll_fd, events, 2, started ? 2000 : -1);
+		nevents = epoll_wait( epoll_fd, events, 2, started ? _fix_frequency*1000 : -1);
 		if (nevents < 0) {
 			if (errno != EINTR)
 				LOGE("epoll_wait() unexpected error: %s", strerror(errno));
@@ -837,6 +838,17 @@ static void gps_delete_aiding_data(GpsAidingData flags) {
 }
 
 static int gps_set_position_mode(GpsPositionMode mode, int fix_frequency) {
+	_fix_frequency=fix_frequency;
+	if(_fix_frequency==0) {
+		//We don't handle single shot requests atm...
+		//So one every 4seconds will it be.
+		_fix_frequency=4;
+	}
+	if(_fix_frequency>8) {
+		//Ok, A9 will timeout with so high value.
+		//Set it to 8.
+		_fix_frequency=8;
+	}
 	return 0;
 }
 
