@@ -48,6 +48,7 @@ static char iface[PROPERTY_VALUE_MAX];
 // TODO: use new ANDROID_SOCKET mechanism, once support for multiple
 // sockets is in
 
+#if 0
 #ifdef BROADCOM_wIFI
 
 #ifndef WIFI_DRIVER_MODULE_PATH
@@ -78,22 +79,59 @@ static char iface[PROPERTY_VALUE_MAX];
 #ifndef WIFI_FIRMWARE_LOADER
 #define WIFI_FIRMWARE_LOADER            "wlan_loader"
 #endif
-#define WIFI_TEST_INTERFACE             "sta"
 
 #endif /* BROADCOM_WIFI */
 
-static const char IFACE_DIR[]           = "/data/system/wpa_supplicant";
-static const char DRIVER_MODULE_NAME[]  = WIFI_DRIVER_MODULE_NAME;
-static const char DRIVER_MODULE_TAG[]   = WIFI_DRIVER_MODULE_NAME " ";
-static const char DRIVER_MODULE_PATH[]  = WIFI_DRIVER_MODULE_PATH;
-static const char DRIVER_MODULE_ARG[]   = WIFI_DRIVER_MODULE_ARG;
-static const char FIRMWARE_LOADER[]     = WIFI_FIRMWARE_LOADER;
-static const char DRIVER_PROP_NAME[]    = "wlan.driver.status";
-static const char SUPPLICANT_NAME[]     = "wpa_supplicant";
-static const char SUPP_PROP_NAME[]      = "init.svc.wpa_supplicant";
-static const char SUPP_CONFIG_TEMPLATE[]= "/system/etc/wifi/wpa_supplicant.conf";
-static const char SUPP_CONFIG_FILE[]    = "/data/misc/wifi/wpa_supplicant.conf";
-static const char MODULE_FILE[]         = "/proc/modules";
+#endif
+
+#define WIFI_TEST_INTERFACE             "sta"
+static enum {
+	BCM,//for rhodium, mtype = 2292
+	TI,
+	UNSET,
+} wifi_chip=UNSET;
+static char IFACE_DIR[]           = "/data/system/wpa_supplicant";
+static char DRIVER_MODULE_NAME[8];//bcm4329 or wlan
+static char DRIVER_MODULE_TAG[9];//'bcm4329 ' or 'wlan '
+static char DRIVER_MODULE_PATH[32];// /system/lib/modules/bcm4329.ko or /system/lib/modules/wlan.ko
+static char DRIVER_MODULE_ARG[83];//empty or "firmware_path=/etc/wifi/bcm432x/bcm4325-rtecdc.bin nvram_path=/data/wifi-nvram.txt"
+static char FIRMWARE_LOADER[12];//empty or wlan_loader
+static char DRIVER_PROP_NAME[]    = "wlan.driver.status";
+static char SUPPLICANT_NAME[]     = "wpa_supplicant";
+static char SUPP_PROP_NAME[]      = "init.svc.wpa_supplicant";
+static char SUPP_CONFIG_TEMPLATE[]= "/system/etc/wifi/wpa_supplicant.conf";
+static char SUPP_CONFIG_FILE[]    = "/data/misc/wifi/wpa_supplicant.conf";
+static char MODULE_FILE[]         = "/proc/modules";
+
+static void update_wifi_chip() {
+	if(wifi_chip!=UNSET)
+		return;
+	int fd=open("/sys/class/htc_hw/machtype", O_RDONLY);
+	char buf[8];
+	//Ti's default.
+	wifi_chip=TI;
+	//Won't fight.
+	if(fd<0) 
+		return;
+	read(fd, buf, 8);
+	if(strncmp(buf, "2292", 4)==0) //rhod machtype
+		wifi_chip=BCM;
+	close(fd);
+	//Ok, now fill in strings.
+	if(wifi_chip==BCM) {
+		strcpy(DRIVER_MODULE_NAME, "bcm4329");
+		strcpy(DRIVER_MODULE_TAG, "bcm4329 ");
+		strcpy(DRIVER_MODULE_PATH, "/system/lib/modules/bcm4329.ko");
+		strcpy(DRIVER_MODULE_ARG, "firmware_path=/etc/wifi/bcm432x/bcm4325-rtecdc.bin nvram_path=/data/wifi-nvram.txt");
+		strcpy(FIRMWARE_LOADER, "");
+	} else {
+		strcpy(DRIVER_MODULE_NAME, "wlan");
+		strcpy(DRIVER_MODULE_TAG, "wlan  ");
+		strcpy(DRIVER_MODULE_PATH, "/system/lib/modules/wlan.ko");
+		strcpy(DRIVER_MODULE_ARG, "");
+		strcpy(FIRMWARE_LOADER, "wlan_loader");
+	}
+}
 
 static int insmod(const char *filename, const char *args)
 {
@@ -134,6 +172,7 @@ static int rmmod(const char *modname)
 int do_dhcp_request(int *ipaddr, int *gateway, int *mask,
                     int *dns1, int *dns2, int *server, int *lease) {
     /* For test driver, always report success */
+	update_wifi_chip();
     if (strcmp(iface, WIFI_TEST_INTERFACE) == 0)
         return 0;
 
@@ -157,6 +196,7 @@ static int check_driver_loaded() {
     char driver_status[PROPERTY_VALUE_MAX];
     FILE *proc;
     char line[sizeof(DRIVER_MODULE_TAG)+10];
+	update_wifi_chip();
 
     if (!property_get(DRIVER_PROP_NAME, driver_status, NULL)
             || strcmp(driver_status, "ok") != 0) {
@@ -188,6 +228,7 @@ int wifi_load_driver()
 {
     char driver_status[PROPERTY_VALUE_MAX];
     int count = 100; /* wait at most 20 seconds for completion */
+	update_wifi_chip();
 
     if (check_driver_loaded()) {
         return 0;
@@ -223,6 +264,7 @@ int wifi_load_driver()
 int wifi_unload_driver()
 {
     int count = 20; /* wait at most 10 seconds for completion */
+	update_wifi_chip();
 
     if (rmmod(DRIVER_MODULE_NAME) == 0) {
 	while (count-- > 0) {
@@ -243,6 +285,7 @@ int ensure_config_file_exists()
     char buf[2048];
     int srcfd, destfd;
     int nread;
+	update_wifi_chip();
 
     if (access(SUPP_CONFIG_FILE, R_OK|W_OK) == 0) {
         return 0;
@@ -295,6 +338,7 @@ int wifi_start_supplicant()
     const prop_info *pi;
     unsigned serial = 0;
 #endif
+	update_wifi_chip();
 
     /* Check whether already running */
     if (property_get(SUPP_PROP_NAME, supp_status, NULL)
@@ -356,6 +400,7 @@ int wifi_stop_supplicant()
 {
     char supp_status[PROPERTY_VALUE_MAX] = {'\0'};
     int count = 50; /* wait at most 5 seconds for completion */
+	update_wifi_chip();
 
     /* Check whether supplicant already stopped */
     if (property_get(SUPP_PROP_NAME, supp_status, NULL)
@@ -380,6 +425,7 @@ int wifi_connect_to_supplicant()
 {
     char ifname[256];
     char supp_status[PROPERTY_VALUE_MAX] = {'\0'};
+	update_wifi_chip();
 
     /* Make sure supplicant is running */
     if (!property_get(SUPP_PROP_NAME, supp_status, NULL)
