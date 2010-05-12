@@ -10,6 +10,7 @@
 #include <librpc/rpc/rpc_router_ioctl.h>
 //#include <debug.h>
 #include <pthread.h>
+#include <libhardware_legacy/gps.h>
 
 typedef struct registered_server_struct {
 	/* MUST BE AT OFFSET ZERO!  The client code assumes this when it overwrites
@@ -289,6 +290,50 @@ int pdsm_get_position(struct CLIENT *clnt, int val0, int val1, int val2, int val
 	return res;
 }
 
+enum pdsm_pd_events {
+	PDSM_PD_EVENT_POS = 0x1,
+	PDSM_PD_EVENT_VELOCITY = 0x2,
+	PDSM_PD_EVENT_HEIGHT = 0x4,
+	PDSM_PD_EVENT_DONE = 0x8,
+	PDSM_PD_EVENT_END = 0x10,
+	PDSM_PD_EVENT_BEGIN = 0x20,
+	PDSM_PD_EVENT_COMM_BEGIN = 0x40,
+	PDSM_PD_EVENT_COMM_CONNECTED = 0x80,
+	PDSM_PD_EVENT_COMM_DONE = 0x200,
+	PDSM_PD_EVENT_GPS_BEGIN = 0x4000,
+	PDSM_PD_EVENT_GPS_DONE = 0x8000,
+	PDSM_PD_EVENT_UPDATE_FAIL = 0x1000000,
+};
+
+//From gps_msm7k.c
+void update_gps_status(GpsStatusValue val);
+
+void dispatch_pdsm_pd(uint32_t *data) {
+	if(data[2]&PDSM_PD_EVENT_GPS_BEGIN) {
+		//Navigation started.
+		update_gps_status(GPS_STATUS_SESSION_BEGIN);
+	}
+	if(data[2]&PDSM_PD_EVENT_GPS_DONE) {
+		//Navigation ended (times out circa 10seconds ater last get_pos)
+		update_gps_status(GPS_STATUS_SESSION_END);
+	}
+}
+
+void dispatch_pdsm_ext(uint32_t *data) {
+}
+
+void dispatch_pdsm(uint32_t *data) {
+	if(data[5]==1) 
+		dispatch_pdsm_pd(data+9*4);
+	else if(data[5]==5) 
+		dispatch_pdsm_ext(data+9*4);
+
+}
+
+void dispatch_atl(uint32_t *data) {
+	// No clue what happens here.
+}
+
 void dispatch(struct svc_req* a, registered_server* svc) {
 	int i;
 	uint32_t *data=svc->xdr->in_msg;
@@ -302,6 +347,13 @@ void dispatch(struct svc_req* a, registered_server* svc) {
 		printf("%010d ", ntohl(data[i]));
 	}
 	printf("\n");
+	if(data[3]==0x3100005b) {
+		dispatch_pdsm(data);
+	} else if(data[3]==3100001d) {
+		dispatch_atl(data);
+	} else {
+		//Got dispatch for unknown serv id!
+	}
 	//ACK
 	svc_sendreply(svc, xdr_int, &result);
 }

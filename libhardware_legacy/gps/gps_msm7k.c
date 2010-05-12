@@ -28,6 +28,8 @@
 /*****************************************************************/
 /*****************************************************************/
 
+/* this is the state of our connection */
+
 typedef struct {
     const char*  p;
     const char*  end;
@@ -158,11 +160,20 @@ typedef struct {
     int     utc_mon;
     int     utc_day;
     int     utc_diff;
-    GpsLocation  fix;
-    gps_location_callback  callback;
+    GpsLocation fix;
+    GpsSvStatus sv_status;
     char    in[ NMEA_MAX_SIZE+1 ];
 } NmeaReader;
 
+typedef struct {
+	int                     init;
+	int                     fd;
+	GpsCallbacks            callbacks;
+	GpsStatus status;
+	pthread_t               thread;
+	int                     control[2];
+} GpsState;
+static GpsState  _gps_state[1];
 
 static void
 nmea_reader_update_utc_diff( NmeaReader*  r )
@@ -201,21 +212,8 @@ nmea_reader_init( NmeaReader*  r )
     r->utc_year = -1;
     r->utc_mon  = -1;
     r->utc_day  = -1;
-    r->callback = NULL;
 
     nmea_reader_update_utc_diff( r );
-}
-
-
-static void
-nmea_reader_set_callback( NmeaReader*  r, gps_location_callback  cb )
-{
-    r->callback = cb;
-    if (cb != NULL && r->fix.flags != 0) {
-        D("%s: sending latest fix to new callback", __FUNCTION__);
-        r->callback( &r->fix );
-        r->fix.flags = 0;
-    }
 }
 
 
@@ -252,7 +250,8 @@ nmea_reader_update_time( NmeaReader*  r, Token  tok )
     tm.tm_isdst = -1;
 
     fix_time = mktime( &tm ) + r->utc_diff;
-    r->fix.timestamp = (long long)fix_time * 1000;
+    r->fix.timestamp = (long long)fix_time * 1000+(int)(seconds*1000)%1000;
+
     return 0;
 }
 
@@ -386,6 +385,7 @@ nmea_reader_parse( NmeaReader*  r )
     */
     NmeaTokenizer  tzer[1];
     Token          tok;
+    int i;
 
     D("Received: '%.*s'", r->pos, r->in);
     if (r->pos < 9) {
@@ -431,7 +431,17 @@ nmea_reader_parse( NmeaReader*  r )
         nmea_reader_update_altitude(r, tok_altitude, tok_altitudeUnits);
 
     } else if ( !memcmp(tok.p, "GSA", 3) ) {
-        // do something ?
+        Token tok_mode		= nmea_tokenizer_get(tzer, 1);
+        Token tok_fix		= nmea_tokenizer_get(tzer, 2);
+        Token tok_svs[11];
+	for(i=0;i<11;i++)
+		tok_svs[i]=nmea_tokenizer_get(tzer, 3+i);
+        Token tok_pdop		= nmea_tokenizer_get(tzer, 15);
+        Token tok_hdop		= nmea_tokenizer_get(tzer, 16);
+        Token tok_vdop		= nmea_tokenizer_get(tzer, 17);
+	//Now what ?
+	//Right we could fill used_in_fix_mask, but that needs previous GPGSV result.
+    } else if ( !memcmp(tok.p, "GSV", 3) ) {
     } else if ( !memcmp(tok.p, "RMC", 3) ) {
         Token  tok_time          = nmea_tokenizer_get(tzer,1);
         Token  tok_fixStatus     = nmea_tokenizer_get(tzer,2);
@@ -487,8 +497,8 @@ nmea_reader_parse( NmeaReader*  r )
         p += snprintf(p, end-p, " time=%s", asctime( &utc ) );
         D(temp);
 #endif
-        if (r->callback) {
-            r->callback( &r->fix );
+        if (_gps_state->callbacks.location_cb) {
+            _gps_state->callbacks.location_cb( &r->fix );
             r->fix.flags = 0;
         }
         else {
@@ -538,16 +548,7 @@ enum {
 };
 
 
-/* this is the state of our connection */
-typedef struct {
-	int                     init;
-	int                     fd;
-	GpsCallbacks            callbacks;
-	pthread_t               thread;
-	int                     control[2];
-} GpsState;
 
-static GpsState  _gps_state[1];
 static void gps_state_done( GpsState*  s ) {
 	// tell the thread to quit, and wait for it
 	char   cmd = CMD_QUIT;
@@ -618,6 +619,13 @@ static int epoll_deregister( int  epoll_fd, int  fd ) {
 	return ret;
 }
 
+void update_gps_status(GpsStatusValue val) {
+	//Should be made thread safe...
+	state->status=val;
+	if(arg->callbacks)
+		arg->callbacks.status_cb(&state->status);
+}
+
 /* this is the main thread, it waits for commands from gps_state_start/stop and,
  * when started, messages from the NMEA SMD. these are simple NMEA sentences
  * that must be parsed to be converted into GPS fixes sent to the framework
@@ -630,6 +638,10 @@ static void* gps_state_thread( void*  arg ) {
 	int         gps_fd     = state->fd;
 	int         control_fd = state->control[1];
 
+	//Engine is enabled when the thread is started.
+	state->status=GPS_STATUS_ENGINE_ON;
+	if(arg->callbacks)
+		arg->callbacks.status_cb(&state->status);
 	nmea_reader_init( reader );
 
 	// register control file descriptors for polling
@@ -643,7 +655,7 @@ static void* gps_state_thread( void*  arg ) {
 		struct epoll_event   events[2];
 		int                  ne, nevents;
 
-		nevents = epoll_wait( epoll_fd, events, 2, started ? 5000 : -1);
+		nevents = epoll_wait( epoll_fd, events, 2, started ? 2000 : -1);
 		if (nevents < 0) {
 			if (errno != EINTR)
 				LOGE("epoll_wait() unexpected error: %s", strerror(errno));
@@ -651,7 +663,7 @@ static void* gps_state_thread( void*  arg ) {
 		}
 		if(nevents==0) {
 			//We should call pdsm_get_position more often than that... but it's not easy to code.
-			//Anyway the 5second timeout is already stupid, it should be lower.
+			//Anyway the 2second timeout is already stupid,
 			if(started)
 				gps_get_position();
 		}
@@ -679,13 +691,11 @@ static void* gps_state_thread( void*  arg ) {
 						if (!started) {
 							D("gps thread starting  location_cb=%p", state->callbacks.location_cb);
 							started = 1;
-							nmea_reader_set_callback( reader, state->callbacks.location_cb );
 						}
 					} else if (cmd == CMD_STOP) {
 						if (started) {
 							D("gps thread stopping");
 							started = 0;
-							nmea_reader_set_callback( reader, NULL );
 							exit_gps_rpc();
 						}
  					}
