@@ -49,7 +49,8 @@ struct SVCXPRT {
 	XDR_SEND_UINT32(clnt, &val);\
 } while(0);
 
-static uint32_t client_IDs[8];//highest known value is 0xb
+static uint32_t client_IDs[16];//highest known value is 0xb
+static uint32_t can_send=1; //To prevent from sending get_position when EVENT_END hasn't been received
 
 struct params {
 	uint32_t *data;
@@ -307,6 +308,7 @@ enum pdsm_pd_events {
 
 //From gps_msm7k.c
 extern void update_gps_status(GpsStatusValue val);
+extern void update_gps_svstatus(GpsSvStatus *val);
 
 void dispatch_pdsm_pd(uint32_t *data) {
 	if(data[2]&PDSM_PD_EVENT_GPS_BEGIN) {
@@ -317,6 +319,21 @@ void dispatch_pdsm_pd(uint32_t *data) {
 		//Navigation ended (times out circa 10seconds ater last get_pos)
 		update_gps_status(GPS_STATUS_SESSION_END);
 	}
+	if(data[2]&PDSM_PD_EVENT_POS) {
+		GpsSvStatus ret;
+		int i;
+		ret.num_svs=data[82];
+		for(i=0;i<ret.num_svs;++i) {
+			ret.sv_list[i].prn=data[83+3*i];
+			ret.sv_list[i].elevation=data[83+3*i+1];
+			ret.sv_list[i].azimuth=data[83+3*i+2]/100;
+			ret.sv_list[i].snr=data[83+3*i+2]%100;
+		}
+		ret.used_in_fix_mask=data[77];
+		update_gps_svstatus(&ret);
+	}
+	if(data[2]&PDSM_PD_EVENT_DONE)
+		can_send=1;
 }
 
 void dispatch_pdsm_ext(uint32_t *data) {
@@ -470,6 +487,9 @@ int init_gps_rpc() {
 }
 
 void gps_get_position() {
+	int i;
+	for(i=5;i;++i) if(!can_send) sleep(1);//Time out of 5 seconds on can_send
+	can_send=0;
 	pdsm_get_position(_clnt, 0, 0, 1, 1, 1, 0x3B9AC9FF, 1, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,1,32,2,client_IDs[2]);
 }
 

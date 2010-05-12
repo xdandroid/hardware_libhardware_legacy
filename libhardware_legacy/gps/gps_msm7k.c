@@ -1,10 +1,11 @@
-//Most code come from qemu gps code
+//code comes from qemu gps code
 #include <errno.h>
 #include <pthread.h>
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include <math.h>
 #include <time.h>
+#include <sys/time.h>
 
 #define  LOG_TAG  "gps_msm7k"
 #include <cutils/log.h>
@@ -392,6 +393,11 @@ nmea_reader_parse( NmeaReader*  r )
         D("Too short. discarded.");
         return;
     }
+    {
+		struct timeval tv;
+		gettimeofday(&tv, NULL);
+		_gps_state->callbacks.nmea_cb(tv.tv_sec*1000+tv.tv_usec/1000, r->in, r->pos);
+    }
 
     nmea_tokenizer_init(tzer, r->in, r->in + r->pos);
 #if GPS_DEBUG
@@ -431,17 +437,9 @@ nmea_reader_parse( NmeaReader*  r )
         nmea_reader_update_altitude(r, tok_altitude, tok_altitudeUnits);
 
     } else if ( !memcmp(tok.p, "GSA", 3) ) {
-        Token tok_mode		= nmea_tokenizer_get(tzer, 1);
-        Token tok_fix		= nmea_tokenizer_get(tzer, 2);
-        Token tok_svs[11];
-	for(i=0;i<11;i++)
-		tok_svs[i]=nmea_tokenizer_get(tzer, 3+i);
-        Token tok_pdop		= nmea_tokenizer_get(tzer, 15);
-        Token tok_hdop		= nmea_tokenizer_get(tzer, 16);
-        Token tok_vdop		= nmea_tokenizer_get(tzer, 17);
-	//Now what ?
-	//Right we could fill used_in_fix_mask, but that needs previous GPGSV result.
+	    //Satellites are handled by RPC-side code.
     } else if ( !memcmp(tok.p, "GSV", 3) ) {
+	    //Satellites are handled by RPC-side code.
     } else if ( !memcmp(tok.p, "RMC", 3) ) {
         Token  tok_time          = nmea_tokenizer_get(tzer,1);
         Token  tok_fixStatus     = nmea_tokenizer_get(tzer,2);
@@ -625,6 +623,13 @@ void update_gps_status(GpsStatusValue val) {
 	state->status.status=val;
 	if(state->callbacks.status_cb)
 		state->callbacks.status_cb(&state->status);
+}
+
+void update_gps_svstatus(GpsSvStatus *val) {
+	GpsState*  state = _gps_state;
+	//Should be made thread safe...
+	if(state->callbacks.sv_status_cb)
+		state->callbacks.sv_status_cb(val);
 }
 
 /* this is the main thread, it waits for commands from gps_state_start/stop and,
