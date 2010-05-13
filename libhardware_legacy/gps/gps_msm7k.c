@@ -36,7 +36,7 @@ typedef struct {
     const char*  end;
 } Token;
 
-#define  MAX_NMEA_TOKENS  16
+#define  MAX_NMEA_TOKENS  32
 
 typedef struct {
     int     count;
