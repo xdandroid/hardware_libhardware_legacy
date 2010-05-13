@@ -343,9 +343,9 @@ void dispatch_pdsm_ext(uint32_t *data) {
 void dispatch_pdsm(uint32_t *data) {
 	uint32_t procid=ntohl(data[5]);
 	if(procid==1) 
-		dispatch_pdsm_pd(data+9*4);
+		dispatch_pdsm_pd(&(data[10]));
 	else if(procid==5) 
-		dispatch_pdsm_ext(data+9*4);
+		dispatch_pdsm_ext(&(data[10]));
 
 }
 
