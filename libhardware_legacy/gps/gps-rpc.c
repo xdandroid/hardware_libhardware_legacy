@@ -488,7 +488,7 @@ int init_gps_rpc() {
 
 void gps_get_position() {
 	int i;
-	for(i=5;i;++i) if(!can_send) sleep(1);//Time out of 5 seconds on can_send
+	for(i=5;i;--i) if(!can_send) sleep(1);//Time out of 5 seconds on can_send
 	can_send=0;
 	pdsm_get_position(_clnt, 0, 0, 1, 1, 1, 0x3B9AC9FF, 1, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,1,32,2,client_IDs[2]);
 }
