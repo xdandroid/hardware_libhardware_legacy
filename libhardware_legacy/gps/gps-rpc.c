@@ -311,15 +311,16 @@ extern void update_gps_status(GpsStatusValue val);
 extern void update_gps_svstatus(GpsSvStatus *val);
 
 void dispatch_pdsm_pd(uint32_t *data) {
-	if(data[2]&PDSM_PD_EVENT_GPS_BEGIN) {
+	uint32_t event=ntohl(data[2]);
+	if(event&PDSM_PD_EVENT_GPS_BEGIN) {
 		//Navigation started.
 		update_gps_status(GPS_STATUS_SESSION_BEGIN);
 	}
-	if(data[2]&PDSM_PD_EVENT_GPS_DONE) {
+	if(event&PDSM_PD_EVENT_GPS_DONE) {
 		//Navigation ended (times out circa 10seconds ater last get_pos)
 		update_gps_status(GPS_STATUS_SESSION_END);
 	}
-	if(data[2]&PDSM_PD_EVENT_POS) {
+	if(event&PDSM_PD_EVENT_POS) {
 		GpsSvStatus ret;
 		int i;
 		ret.num_svs=data[82];
@@ -332,7 +333,7 @@ void dispatch_pdsm_pd(uint32_t *data) {
 		ret.used_in_fix_mask=data[77];
 		update_gps_svstatus(&ret);
 	}
-	if(data[2]&PDSM_PD_EVENT_DONE)
+	if(event&PDSM_PD_EVENT_DONE)
 		can_send=1;
 }
 
@@ -340,9 +341,10 @@ void dispatch_pdsm_ext(uint32_t *data) {
 }
 
 void dispatch_pdsm(uint32_t *data) {
-	if(data[5]==1) 
+	uint32_t procid=ntohl(data[5]);
+	if(procid==1) 
 		dispatch_pdsm_pd(data+9*4);
-	else if(data[5]==5) 
+	else if(procid==5) 
 		dispatch_pdsm_ext(data+9*4);
 
 }
@@ -355,6 +357,7 @@ void dispatch(struct svc_req* a, registered_server* svc) {
 	int i;
 	uint32_t *data=svc->xdr->in_msg;
 	uint32_t result=0;
+	uint32_t svid=ntohl(data[3]);
 	printf("received some kind of event\n");
 	for(i=0;i< svc->xdr->in_len/4;++i) {
 		printf("%08x ", ntohl(data[i]));
@@ -364,9 +367,9 @@ void dispatch(struct svc_req* a, registered_server* svc) {
 		printf("%010d ", ntohl(data[i]));
 	}
 	printf("\n");
-	if(data[3]==0x3100005b) {
+	if(svid==0x3100005b) {
 		dispatch_pdsm(data);
-	} else if(data[3]==0x3100001d) {
+	} else if(svid==0x3100001d) {
 		dispatch_atl(data);
 	} else {
 		//Got dispatch for unknown serv id!
