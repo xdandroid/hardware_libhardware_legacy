@@ -404,6 +404,7 @@ nmea_reader_parse( NmeaReader*  r )
         D("Found %d tokens", tzer->count);
         for (n = 0; n < tzer->count; n++) {
             Token  tok = nmea_tokenizer_get(tzer,n);
+            D("size of %2d: '%d', ptr=%x", n, tok.end-tok.p, tok.p);
             D("%2d: '%.*s'", n, tok.end-tok.p, tok.p);
         }
     }

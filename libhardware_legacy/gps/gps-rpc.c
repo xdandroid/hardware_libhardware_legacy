@@ -321,17 +321,22 @@ void dispatch_pdsm_pd(uint32_t *data) {
 		update_gps_status(GPS_STATUS_SESSION_END);
 	}
 	if(event&PDSM_PD_EVENT_POS) {
+		/*
+		 * This code doesn't work (segfault)
+		 * wrong reading address ?
+		 */
+		/*
 		GpsSvStatus ret;
 		int i;
-		ret.num_svs=data[82];
+		ret.num_svs=data[72];
 		for(i=0;i<ret.num_svs;++i) {
-			ret.sv_list[i].prn=data[83+3*i];
-			ret.sv_list[i].elevation=data[83+3*i+1];
-			ret.sv_list[i].azimuth=data[83+3*i+2]/100;
-			ret.sv_list[i].snr=data[83+3*i+2]%100;
+			ret.sv_list[i].prn=data[73+3*i];
+			ret.sv_list[i].elevation=data[73+3*i+1];
+			ret.sv_list[i].azimuth=data[73+3*i+2]/100;
+			ret.sv_list[i].snr=data[73+3*i+2]%100;
 		}
-		ret.used_in_fix_mask=data[77];
-		update_gps_svstatus(&ret);
+		ret.used_in_fix_mask=data[67];
+		update_gps_svstatus(&ret);*/
 	}
 	if(event&PDSM_PD_EVENT_DONE)
 		can_send=1;
