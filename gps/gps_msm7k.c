@@ -631,6 +631,13 @@ void update_gps_svstatus(GpsSvStatus *val) {
 		state->callbacks.sv_status_cb(val);
 }
 
+void update_gps_location(GpsLocation *fix) {
+        GpsState*  state = _gps_state;
+        //Should be made thread safe...
+        if(state->callbacks.location_cb)
+                state->callbacks.location_cb(fix);
+}
+
 /* this is the main thread, it waits for commands from gps_state_start/stop and,
  * when started, messages from the NMEA SMD. these are simple NMEA sentences
  * that must be parsed to be converted into GPS fixes sent to the framework
@@ -652,7 +659,9 @@ static void* gps_state_thread( void*  arg ) {
 
 	// register control file descriptors for polling
 	epoll_register( epoll_fd, control_fd );
-	epoll_register( epoll_fd, gps_fd );
+	if (gps_fd > -1) {
+		epoll_register( epoll_fd, gps_fd );
+	}
 
 	D("gps thread running");
 
@@ -661,7 +670,7 @@ static void* gps_state_thread( void*  arg ) {
 		struct epoll_event   events[2];
 		int                  ne, nevents;
 
-		nevents = epoll_wait( epoll_fd, events, 2, started ? _fix_frequency*1000 : -1);
+		nevents = epoll_wait( epoll_fd, events, gps_fd>-1 ? 2 : 1, started ? _fix_frequency*1000 : -1);
 		if (nevents < 0) {
 			if (errno != EINTR)
 				LOGE("epoll_wait() unexpected error: %s", strerror(errno));
@@ -739,12 +748,7 @@ static void gps_state_init( GpsState*  state ) {
 	state->init       = 1;
 	state->control[0] = -1;
 	state->control[1] = -1;
-	state->fd = open("/dev/smd27", O_RDONLY );
-
-	if (state->fd < 0) {
-		D("no gps smd detected(cdma raph/diam ?)");
-		return;
-	}
+	state->fd = -1; // open("/dev/smd27", O_RDONLY );
 
 	if ( socketpair( AF_LOCAL, SOCK_STREAM, 0, state->control ) < 0 ) {
 		LOGE("could not create thread control socket pair: %s", strerror(errno));
@@ -780,9 +784,6 @@ static int gps_init(GpsCallbacks* callbacks) {
 
 	if (!s->init)
 		gps_state_init(s);
-
-	if (s->fd < 0)
-		return -1;
 
 	s->callbacks = *callbacks;
 

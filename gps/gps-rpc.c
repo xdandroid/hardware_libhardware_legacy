@@ -309,6 +309,7 @@ enum pdsm_pd_events {
 //From gps_msm7k.c
 extern void update_gps_status(GpsStatusValue val);
 extern void update_gps_svstatus(GpsSvStatus *val);
+extern void update_gps_location(GpsLocation *fix);
 
 void dispatch_pdsm_pd(uint32_t *data) {
 	uint32_t event=ntohl(data[2]);
@@ -320,36 +321,96 @@ void dispatch_pdsm_pd(uint32_t *data) {
 		//Navigation ended (times out circa 10seconds ater last get_pos)
 		update_gps_status(GPS_STATUS_SESSION_END);
 	}
+	GpsLocation fix;
+	fix.flags = 0;
 	if(event&PDSM_PD_EVENT_POS) {
-		/*
-		 * This code doesn't work (segfault)
-		 * wrong reading address ?
-		 */
-		/*
+	
 		GpsSvStatus ret;
 		int i;
-		ret.num_svs=data[72];
+		ret.num_svs=ntohl(data[82]) & 0x1F;
+
 		for(i=0;i<ret.num_svs;++i) {
-			ret.sv_list[i].prn=data[73+3*i];
-			ret.sv_list[i].elevation=data[73+3*i+1];
-			ret.sv_list[i].azimuth=data[73+3*i+2]/100;
-			ret.sv_list[i].snr=data[73+3*i+2]%100;
+			ret.sv_list[i].prn=ntohl(data[83+3*i]);
+			ret.sv_list[i].elevation=ntohl(data[83+3*i+1]);
+			ret.sv_list[i].azimuth=ntohl(data[83+3*i+2])/100;
+			ret.sv_list[i].snr=ntohl(data[83+3*i+2])%100;
 		}
-		ret.used_in_fix_mask=data[67];
-		update_gps_svstatus(&ret);*/
+		ret.used_in_fix_mask=ntohl(data[77]);
+		update_gps_svstatus(&ret);
+
+		fix.timestamp = ntohl(data[8]);
+		if (!fix.timestamp) return;
+
+		// convert gps time to epoch time ms
+		fix.timestamp += 315964800; // 1/1/1970 to 1/6/1980
+		fix.timestamp *= 1000; //ms
+
+		fix.flags |= GPS_LOCATION_HAS_LAT_LONG;
+
+		if (ntohl(data[75])) {
+			fix.flags |= GPS_LOCATION_HAS_ACCURACY;
+			fix.accuracy = (float)ntohl(data[75]) / 10.0f;
+		}
+
+		union {
+			struct {
+				uint32_t lowPart;
+				int32_t highPart;
+			};
+			int64_t int64Part;
+		} latitude, longitude;
+
+		latitude.lowPart = ntohl(data[61]);
+		latitude.highPart = ntohl(data[60]);
+		longitude.lowPart = ntohl(data[63]);
+		longitude.highPart = ntohl(data[62]);
+		fix.latitude = (double)latitude.int64Part / 1.0E8;
+		fix.longitude = (double)longitude.int64Part / 1.0E8;
+	}
+	if (event&PDSM_PD_EVENT_VELOCITY)
+	{
+		fix.flags |= GPS_LOCATION_HAS_SPEED|GPS_LOCATION_HAS_BEARING;
+		fix.speed = (float)ntohl(data[66]) / 10.0f / 3.6f; // convert kp/h to m/s
+		fix.bearing = (float)ntohl(data[67]) / 10.0f;
+	}
+	if (event&PDSM_PD_EVENT_HEIGHT)
+	{
+		fix.flags |= GPS_LOCATION_HAS_ALTITUDE;
+		fix.altitude = (double)ntohl(data[64]) / 10.0f;
+	}
+	if (fix.flags)
+	{
+		update_gps_location(&fix);
 	}
 	if(event&PDSM_PD_EVENT_DONE)
 		can_send=1;
 }
 
 void dispatch_pdsm_ext(uint32_t *data) {
+
+	GpsSvStatus ret;
+	int i;
+
+	ret.num_svs=ntohl(data[7]);
+	for(i=0;i<ret.num_svs;++i) {
+		ret.sv_list[i].prn=ntohl(data[101+12*i]);
+		ret.sv_list[i].elevation=ntohl(data[101+12*i+4]);
+		ret.sv_list[i].azimuth=ntohl(data[101+12*i+3]);
+		ret.sv_list[i].snr=(float)ntohl(data[101+12*i+1])/10.0f;
+	}
+
+	ret.used_in_fix_mask=ntohl(data[8]);
+	if (ret.num_svs) {
+		update_gps_svstatus(&ret);
+	}
+
 }
 
 void dispatch_pdsm(uint32_t *data) {
 	uint32_t procid=ntohl(data[5]);
 	if(procid==1) 
 		dispatch_pdsm_pd(&(data[10]));
-	else if(procid==5) 
+	else if(procid==4) 
 		dispatch_pdsm_ext(&(data[10]));
 
 }
@@ -483,10 +544,10 @@ int init_gps_rpc() {
 	read(fd, buf, 32);
 	if(strncmp(buf, "6125", 4)==0)
 		amss=A6125;
-	else if(strncmp(buf, "5225", 4)==0)
+	else if((strncmp(buf, "5225", 4)==0) || (strncmp(buf, "6150", 4)==0))
 		amss=A5225;
 	else
-		amss=A6125; //Fallback to 6125 ATM, but could be 6150, which isn't expected to work
+		amss=A6125; //Fallback to 6125 ATM
 	if(amss==A6125)
 		init_gps6125();
 	else if(amss==A5225)
