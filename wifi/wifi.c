@@ -79,6 +79,9 @@ static char iface[PROPERTY_VALUE_MAX];
 #ifndef WIFI_FIRMWARE_LOADER
 #define WIFI_FIRMWARE_LOADER            "wlan_loader"
 #endif
+#ifndef WIFI_DRIVER_LOADER_DELAY
+#define WIFI_DRIVER_LOADER_DELAY        500000
+#endif
 
 #endif /* BROADCOM_WIFI */
 
@@ -238,7 +241,7 @@ int wifi_load_driver()
         return -1;
 
     if (strcmp(FIRMWARE_LOADER,"") == 0) {
-        usleep(500000);
+        usleep(WIFI_DRIVER_LOADER_DELAY);
         property_set(DRIVER_PROP_NAME, "ok");
     }
     else {
@@ -372,7 +375,7 @@ int wifi_start_supplicant()
     sched_yield();
 
     while (count-- > 0) {
- #ifdef HAVE_LIBC_SYSTEM_PROPERTIES
+#ifdef HAVE_LIBC_SYSTEM_PROPERTIES
         if (pi == NULL) {
             pi = __system_property_find(SUPP_PROP_NAME);
         }
@@ -493,13 +496,19 @@ int wifi_wait_for_event(char *buf, size_t buflen)
     struct timeval tval;
     struct timeval *tptr;
     
-    if (monitor_conn == NULL)
-        return 0;
+    if (monitor_conn == NULL) {
+        LOGD("Connection closed\n");
+        strncpy(buf, WPA_EVENT_TERMINATING " - connection closed", buflen-1);
+        buf[buflen-1] = '\0';
+        return strlen(buf);
+    }
 
     result = wpa_ctrl_recv(monitor_conn, buf, &nread);
     if (result < 0) {
         LOGD("wpa_ctrl_recv failed: %s\n", strerror(errno));
-        return -1;
+        strncpy(buf, WPA_EVENT_TERMINATING " - recv error", buflen-1);
+        buf[buflen-1] = '\0';
+        return strlen(buf);
     }
     buf[nread] = '\0';
     /* LOGD("wait_for_event: result=%d nread=%d string=\"%s\"\n", result, nread, buf); */

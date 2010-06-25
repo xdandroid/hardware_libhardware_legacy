@@ -18,6 +18,7 @@
 #define _HARDWARE_GPS_H
 
 #include <stdint.h>
+#include <stdlib.h>
 
 #if __cplusplus
 extern "C" {
@@ -114,9 +115,19 @@ typedef uint16_t AGpsStatusValue;
 #define GPS_XTRA_INTERFACE      "gps-xtra"
 
 /**
+ * Name for the GPS DEBUG interface.
+ */
+#define GPS_DEBUG_INTERFACE      "gps-debug"
+
+/**
  * Name for the AGPS interface.
  */
 #define AGPS_INTERFACE      "agps"
+
+/**
+ * Name for the GPS privacy interface.
+ */
+#define GPS_PRIVACY_INTERFACE      "privacy"
 
 /** Represents a location. */
 typedef struct {
@@ -268,6 +279,15 @@ typedef struct {
     int  (*inject_xtra_data)( char* data, int length );
 } GpsXtraInterface;
 
+/** Extended interface for DEBUG support. */
+typedef struct {
+    /**
+     * This function should return any information that the native
+     * implementation wishes to include in a bugreport.
+     */
+    size_t (*get_internal_state)(char* buffer, size_t bufferSize);
+} GpsDebugInterface;
+
 /** Represents the status of AGPS. */
 typedef struct {
     AGpsType        type;
@@ -308,6 +328,15 @@ typedef struct {
      */
     int  (*set_server)( AGpsType type, const char* hostname, int port );
 } AGpsInterface;
+
+/** Extended interface for GPS privacy support. */
+typedef struct {
+    /**
+     * Opens the AGPS interface and provides the callback routines
+     * to the implemenation of this interface.
+     */
+    void  (*set_privacy_lock)( int enable_lock );
+} GpsPrivacyInterface;
 
 /** Returns the hardware GPS interface. */
 const GpsInterface* gps_get_hardware_interface();
