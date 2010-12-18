@@ -492,7 +492,7 @@ nmea_reader_parse( NmeaReader*  r )
         }
         gmtime_r( (time_t*) &r->fix.timestamp, &utc );
         p += snprintf(p, end-p, " time=%s", asctime( &utc ) );
-        D(temp);
+        D("%s", temp);
 #endif
         if (_gps_state->callbacks.location_cb) {
             _gps_state->callbacks.location_cb( &r->fix );
