@@ -94,11 +94,11 @@ static enum {
 	UNSET,
 } wifi_chip=UNSET;
 static char IFACE_DIR[]           = "/data/system/wpa_supplicant";
-static char DRIVER_MODULE_NAME[8];//bcm4329 or wlan
-static char DRIVER_MODULE_TAG[9];//'bcm4329 ' or 'wlan '
-static char DRIVER_MODULE_PATH[32];// /system/lib/modules/bcm4329.ko or /system/lib/modules/wlan.ko
-static char DRIVER_MODULE_ARG[83];//empty or "firmware_path=/etc/wifi/bcm432x/bcm4325-rtecdc.bin nvram_path=/data/wifi-nvram.txt"
-static char FIRMWARE_LOADER[12];//empty or wlan_loader
+static char DRIVER_MODULE_NAME[sizeof("bcm4329")]; //or wlan
+static char DRIVER_MODULE_TAG[sizeof("bcm4329 ")]; //or 'wlan '
+static char DRIVER_MODULE_PATH[sizeof("/system/lib/modules/bcm4329.ko")];//or /system/lib/modules/wlan.ko
+static char DRIVER_MODULE_ARG[sizeof("firmware_path=/etc/wifi/bcm432x/bcm4325-rtecdc.bin nvram_path=/data/wifi-nvram.txt iface_name=wlan0")]; //or empty
+static char FIRMWARE_LOADER[sizeof("wlan_loader")];//or empty
 static char DRIVER_PROP_NAME[]    = "wlan.driver.status";
 static char SUPPLICANT_NAME[]     = "wpa_supplicant";
 static char SUPP_PROP_NAME[]      = "init.svc.wpa_supplicant";
@@ -125,7 +125,7 @@ static void update_wifi_chip() {
 		strcpy(DRIVER_MODULE_NAME, "bcm4329");
 		strcpy(DRIVER_MODULE_TAG, "bcm4329 ");
 		strcpy(DRIVER_MODULE_PATH, "/system/lib/modules/bcm4329.ko");
-		strcpy(DRIVER_MODULE_ARG, "firmware_path=/etc/wifi/bcm432x/bcm4325-rtecdc.bin nvram_path=/data/wifi-nvram.txt");
+		strcpy(DRIVER_MODULE_ARG, "firmware_path=/etc/wifi/bcm432x/bcm4325-rtecdc.bin nvram_path=/data/wifi-nvram.txt iface_name=wlan0");
 		strcpy(FIRMWARE_LOADER, "");
 	} else {
 		strcpy(DRIVER_MODULE_NAME, "wlan");
@@ -245,6 +245,7 @@ int wifi_load_driver()
         property_set(DRIVER_PROP_NAME, "ok");
     }
     else {
+        system("/bin/ip link set tiwlan0 name wlan0");
         property_set("ctl.start", FIRMWARE_LOADER);
     }
     sched_yield();
