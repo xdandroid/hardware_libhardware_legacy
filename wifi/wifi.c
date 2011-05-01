@@ -245,7 +245,7 @@ int wifi_load_driver()
         property_set(DRIVER_PROP_NAME, "ok");
     }
     else {
-        system("/bin/ip link set tiwlan0 name wlan0");
+        system("/bin/ip link set dev tiwlan0 name wlan0");
         property_set("ctl.start", FIRMWARE_LOADER);
     }
     sched_yield();
@@ -338,6 +338,7 @@ int wifi_start_supplicant()
 {
     char supp_status[PROPERTY_VALUE_MAX] = {'\0'};
     int count = 200; /* wait at most 20 seconds for completion */
+    char supp_name[sizeof(SUPPLICANT_NAME)+sizeof(":-Dwext")];
 #ifdef HAVE_LIBC_SYSTEM_PROPERTIES
     const prop_info *pi;
     unsigned serial = 0;
@@ -372,7 +373,11 @@ int wifi_start_supplicant()
         serial = pi->serial;
     }
 #endif
-    property_set("ctl.start", SUPPLICANT_NAME);
+    strcpy(supp_name, SUPPLICANT_NAME);
+    if (wifi_chip == BCM)
+        strcpy(supp_name + sizeof(SUPPLICANT_NAME)-1, ":-Dwext");
+
+    property_set("ctl.start", supp_name);
     sched_yield();
 
     while (count-- > 0) {
